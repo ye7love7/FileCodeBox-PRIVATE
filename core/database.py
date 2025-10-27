@@ -10,18 +10,33 @@ from core.settings import data_root, DATABASE_CONFIG
 
 async def init_db():
     try:
-        # 构建MySQL连接字符串
-        db_url = f"mysql+aiomysql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}?charset={DATABASE_CONFIG['charset']}"
-
-        # 使用正确的Tortoise初始化配置格式
+        # 使用正确的Tortoise MySQL连接格式
         db_config = {
-            "db_url": db_url,
-            "modules": {"models": ["apps.base.models"]},
+            "connections": {
+                "default": {
+                    "engine": "tortoise.backends.mysql",
+                    "credentials": {
+                        "host": DATABASE_CONFIG['host'],
+                        "port": DATABASE_CONFIG['port'],
+                        "user": DATABASE_CONFIG['user'],
+                        "password": DATABASE_CONFIG['password'],
+                        "database": DATABASE_CONFIG['database'],
+                        "charset": DATABASE_CONFIG['charset'],
+                        "echo": False
+                    }
+                }
+            },
+            "apps": {
+                "models": {
+                    "models": ["apps.base.models"],
+                    "default_connection": "default",
+                }
+            },
             "use_tz": False,
             "timezone": "Asia/Shanghai"
         }
 
-        await Tortoise.init(**db_config)
+        await Tortoise.init(config=db_config)
 
         # 创建migrations表 (MySQL语法)
         await Tortoise.get_connection("default").execute_script("""
@@ -58,7 +73,7 @@ async def execute_migrations():
 
             # 检查是否已执行
             executed = await Tortoise.get_connection("default").execute_query(
-                "SELECT id FROM migrates WHERE migration_file = ?", [file_name]
+                "SELECT id FROM migrates WHERE migration_file = %s", [file_name]
             )
 
             if not executed[1]:
@@ -71,7 +86,7 @@ async def execute_migrations():
                         await migration_module.migrate()
                         # 记录执行
                         await Tortoise.get_connection("default").execute_query(
-                            "INSERT INTO migrates (migration_file) VALUES (?)",
+                            "INSERT INTO migrates (migration_file) VALUES (%s)",
                             [file_name]
                         )
                         logger.info(f"迁移完成: {file_name}")

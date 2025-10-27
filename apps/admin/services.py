@@ -14,8 +14,8 @@ class FileService:
     def __init__(self):
         self.file_storage: FileStorageInterface = storages[settings.file_storage]()
 
-    async def delete_file(self, file_id: int):
-        file_code = await FileCodes.get(id=file_id)
+    async def delete_file(self, file_id: int,user_id: str):
+        file_code = await FileCodes.get(id=file_id,user_id=user_id)
         await self.file_storage.delete_file(file_code)
         await file_code.delete()
 

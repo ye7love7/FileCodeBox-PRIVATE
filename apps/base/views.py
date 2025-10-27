@@ -28,34 +28,34 @@ async def create_file_code(code, **kwargs):
     return await FileCodes.create(code=code, **kwargs)
 
 
-@share_api.post("/text/", dependencies=[Depends(share_required_login)])
-async def share_text(
-        text: str = Form(...),
-        expire_value: int = Form(default=1, gt=0),
-        expire_style: str = Form(default="day"),
-        user_id: str = Form(default=None),
-        ip: str = Depends(ip_limit["upload"]),
-):
-    text_size = len(text.encode("utf-8"))
-    max_txt_size = 222 * 1024
-    if text_size > max_txt_size:
-        raise HTTPException(status_code=403, detail="内容过多,建议采用文件形式")
+# @share_api.post("/text/", dependencies=[Depends(share_required_login)])
+# async def share_text(
+#         text: str = Form(...),
+#         expire_value: int = Form(default=1, gt=0),
+#         expire_style: str = Form(default="day"),
+#         user_id: str = Form(default=None),
+#         ip: str = Depends(ip_limit["upload"]),
+# ):
+#     text_size = len(text.encode("utf-8"))
+#     max_txt_size = 222 * 1024
+#     if text_size > max_txt_size:
+#         raise HTTPException(status_code=403, detail="内容过多,建议采用文件形式")
 
-    expired_at, expired_count, used_count, code = await get_expire_info(
-        expire_value, expire_style
-    )
-    await create_file_code(
-        code=code,
-        text=text,
-        expired_at=expired_at,
-        expired_count=expired_count,
-        used_count=used_count,
-        size=len(text),
-        prefix="Text",
-        user_id=user_id,
-    )
-    ip_limit["upload"].add_ip(ip)
-    return APIResponse(detail={"code": code})
+#     expired_at, expired_count, used_count, code = await get_expire_info(
+#         expire_value, expire_style
+#     )
+#     await create_file_code(
+#         code=code,
+#         text=text,
+#         expired_at=expired_at,
+#         expired_count=expired_count,
+#         used_count=used_count,
+#         size=len(text),
+#         prefix="Text",
+#         user_id=user_id,
+#     )
+#     ip_limit["upload"].add_ip(ip)
+#     return APIResponse(detail={"code": code})
 
 
 @share_api.post("/file/", dependencies=[Depends(share_required_login)])
@@ -309,6 +309,7 @@ async def get_user_files(data: UserFileListRequest):
             "is_text": file_obj.text is not None,
             "expired_count": file_obj.expired_count,
             "used_count": file_obj.used_count,
+            "id": file_obj.id,
         }
         file_list.append(file_info)
 

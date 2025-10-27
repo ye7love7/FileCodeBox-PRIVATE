@@ -80,14 +80,23 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 构建MySQL连接字符串
-db_url = f"mysql+aiomysql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}?charset={DATABASE_CONFIG['charset']}"
-
 # 使用 register_tortoise 来添加异常处理器
 register_tortoise(
     app,
     config={
-        "connections": {"default": db_url},
+        "connections": {
+            "default": {
+                "engine": "tortoise.backends.mysql",
+                "credentials": {
+                    "host": DATABASE_CONFIG['host'],
+                    "port": DATABASE_CONFIG['port'],
+                    "user": DATABASE_CONFIG['user'],
+                    "password": DATABASE_CONFIG['password'],
+                    "database": DATABASE_CONFIG['database'],
+                    "charset": DATABASE_CONFIG['charset']
+                }
+            }
+        },
         "apps": {
             "models": {
                 "models": ["apps.base.models"],

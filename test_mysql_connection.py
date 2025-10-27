@@ -23,32 +23,38 @@ async def test_mysql_connection():
         print(f"数据库名: {DATABASE_CONFIG['database']}")
         print(f"用户名: {DATABASE_CONFIG['user']}")
 
-        # 测试aiomysql连接
-        print("\n1. 测试aiomysql连接...")
-        import aiomysql
-        conn = await aiomysql.connect(
-            host=DATABASE_CONFIG['host'],
-            port=DATABASE_CONFIG['port'],
-            user=DATABASE_CONFIG['user'],
-            password=DATABASE_CONFIG['password'],
-            db=DATABASE_CONFIG['database'],
-            charset=DATABASE_CONFIG['charset']
-        )
-        print("✅ aiomysql连接成功!")
+        # 测试数据库基础连接（使用PyMySQL）
+        print("\n1. 测试数据库基础连接...")
+        import pymysql
 
-        # 测试查询
-        async with conn.cursor() as cursor:
-            await cursor.execute("SELECT VERSION()")
-            version = await cursor.fetchone()
-            print(f"MySQL版本: {version[0]}")
+        try:
+            conn = pymysql.connect(
+                host=DATABASE_CONFIG['host'],
+                port=DATABASE_CONFIG['port'],
+                user=DATABASE_CONFIG['user'],
+                password=DATABASE_CONFIG['password'],
+                database=DATABASE_CONFIG['database'],
+                charset=DATABASE_CONFIG['charset']
+            )
+            print("✅ PyMySQL连接成功!")
 
-        # 测试表是否存在
-        async with conn.cursor() as cursor:
-            await cursor.execute("SHOW TABLES")
-            tables = await cursor.fetchall()
-            print(f"现有表: {[table[0] for table in tables]}")
+            # 测试查询
+            with conn.cursor() as cursor:
+                cursor.execute("SELECT VERSION()")
+                version = cursor.fetchone()
+                print(f"MySQL版本: {version[0]}")
 
-        await conn.ensure_closed()
+            # 测试表是否存在
+            with conn.cursor() as cursor:
+                cursor.execute("SHOW TABLES")
+                tables = cursor.fetchall()
+                print(f"现有表: {[table[0] for table in tables]}")
+
+            conn.close()
+
+        except Exception as e:
+            print(f"❌ PyMySQL连接失败: {e}")
+            # 如果PyMySQL失败，我们仍然继续测试Tortoise ORM
 
         # 测试Tortoise ORM连接
         print("\n2. 测试Tortoise ORM连接...")
@@ -94,12 +100,14 @@ async def test_mysql_connection():
 
     except ImportError as e:
         print(f"❌ 导入错误: {e}")
-        print("请确保已安装所有依赖: pip install -r requirements.txt")
+        print("请确保已安装所有依赖:")
+        print("pip install -r requirements.txt")
+        print("或者运行: python install_mysql_deps.py")
         return False
     except Exception as e:
         print(f"❌ 连接失败: {e}")
         print("\n请检查以下配置:")
-        print("1. MySQL服务器是否运行在 192.168.9.56:3306")
+        print("1. MySQL服务器是否运行在 192.168.9.56:33306")
         print("2. 用户名和密码是否正确")
         print("3. 数据库 'filecodebox' 是否存在")
         print("4. 网络连接是否正常")
@@ -117,14 +125,31 @@ async def show_database_info():
         from core.settings import DATABASE_CONFIG
         from tortoise import Tortoise
 
-        # 构建连接字符串
-        db_url = f"mysql+aiomysql://{DATABASE_CONFIG['user']}:{DATABASE_CONFIG['password']}@{DATABASE_CONFIG['host']}:{DATABASE_CONFIG['port']}/{DATABASE_CONFIG['database']}?charset={DATABASE_CONFIG['charset']}"
+        # 使用正确的Tortoise MySQL连接格式
+        db_config = {
+            "connections": {
+                "default": {
+                    "engine": "tortoise.backends.mysql",
+                    "credentials": {
+                        "host": DATABASE_CONFIG['host'],
+                        "port": DATABASE_CONFIG['port'],
+                        "user": DATABASE_CONFIG['user'],
+                        "password": DATABASE_CONFIG['password'],
+                        "database": DATABASE_CONFIG['database'],
+                        "charset": DATABASE_CONFIG['charset']
+                    }
+                }
+            },
+            "apps": {
+                "models": {
+                    "models": ["apps.base.models"],
+                    "default_connection": "default",
+                }
+            }
+        }
 
         # 初始化Tortoise
-        await Tortoise.init(
-            db_url=db_url,
-            modules={"models": ["apps.base.models"]}
-        )
+        await Tortoise.init(config=db_config)
 
         # 获取连接
         conn = Tortoise.get_connection("default")

@@ -67,7 +67,7 @@ async def file_delete(
         file_service: FileService = Depends(get_file_service),
         admin: bool = Depends(admin_required),
 ):
-    await file_service.delete_file(data.id)
+    await file_service.delete_file(data.id,data.user_id)
     return APIResponse()
 
 

@@ -32,10 +32,10 @@ async def create_key_value_table():
         CREATE TABLE IF NOT EXISTS keyvalue
         (
             id         INT AUTO_INCREMENT PRIMARY KEY,
-            key        VARCHAR(255) NOT NULL UNIQUE,
+            `key`      VARCHAR(255) NOT NULL UNIQUE,
             value      JSON,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP NOT NULL,
-            INDEX idx_keyvalue_key (key)
+            INDEX idx_keyvalue_key (`key`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
     """
     )

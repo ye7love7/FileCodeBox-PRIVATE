@@ -13,7 +13,7 @@ if not data_root.exists():
 # MySQL数据库配置
 DATABASE_CONFIG = {
     "host": "192.168.9.56",
-    "port": 3306,
+    "port": 33306,
     "user": "filebox",
     "password": "Yqga!123",
     "database": "filecodebox",
