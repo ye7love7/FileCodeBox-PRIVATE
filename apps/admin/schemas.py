@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 class IDData(BaseModel):
     id: int
-    user_id: str
+
 
 
 class ShareItem(BaseModel):

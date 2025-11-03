@@ -23,3 +23,8 @@ class UserFileListRequest(BaseModel):
     user_id: str
     page: int = 1
     page_size: int = 20
+
+
+class UserIDData(BaseModel):
+    id: int
+    user_id: str

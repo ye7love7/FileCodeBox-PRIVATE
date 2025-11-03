@@ -3,16 +3,19 @@ import uuid
 
 from fastapi import APIRouter, Form, UploadFile, File, Depends, HTTPException
 from starlette import status
+from tortoise.functions import Sum
 
 from apps.admin.dependencies import share_required_login
 from apps.base.models import FileCodes, UploadChunk
-from apps.base.schemas import SelectFileModel, InitChunkUploadModel, CompleteUploadModel, UserFileListRequest
+from apps.base.schemas import SelectFileModel, InitChunkUploadModel, CompleteUploadModel, UserFileListRequest,UserIDData
 from apps.base.utils import get_expire_info, get_file_path_name, ip_limit, get_chunk_file_path_name
 from core.response import APIResponse
 from core.settings import settings
 from core.storage import storages, FileStorageInterface
 from core.utils import get_select_token
 
+from apps.admin.services import FileService
+from apps.admin.dependencies import get_file_service
 share_api = APIRouter(prefix="/share", tags=["分享"])
 
 
@@ -26,6 +29,28 @@ async def validate_file_size(file: UploadFile, max_size: int):
 
 async def create_file_code(code, **kwargs):
     return await FileCodes.create(code=code, **kwargs)
+
+
+async def check_user_storage_limit(user_id: str, file_size: int) -> None:
+    """
+    检查用户存储容量限制
+    :param user_id: 用户ID
+    :param file_size: 本次上传的文件大小
+    :raises HTTPException: 如果超过限制则抛出异常
+    """
+    if not user_id:
+        return  # 如果没有user_id，则不检查（匿名上传）
+    
+    # 获取用户已上传的文件总容量
+    result = await FileCodes.filter(user_id=user_id).aggregate(total_size=Sum('size'))
+    user_upload_size = result.get('total_size') or 0
+    
+    # 检查总容量是否超过限制
+    if user_upload_size + file_size > settings.uploadSize:
+        raise HTTPException(
+            status_code=400,
+            detail=f"用户已上传的文件容量超过限制，已使用: {user_upload_size / (1024 * 1024):.2f} MB，限制: {settings.uploadSize / (1024 * 1024):.2f} MB"
+        )
 
 
 # @share_api.post("/text/", dependencies=[Depends(share_required_login)])
@@ -66,7 +91,10 @@ async def share_file(
         user_id: str = Form(default=None),
         ip: str = Depends(ip_limit["upload"]),
 ):
+    # 获取用户已上传的文件容量，如果加上本次上传的文件容量超过限制，则返回错误
     await validate_file_size(file, settings.uploadSize)
+    # 检查用户存储容量限制
+    await check_user_storage_limit(user_id, file.size)
     if expire_style not in settings.expireStyle:
         raise HTTPException(status_code=400, detail="过期时间类型错误")
     expired_at, expired_count, used_count, code = await get_expire_info(expire_value, expire_style)
@@ -160,6 +188,16 @@ chunk_api = APIRouter(prefix="/chunk", tags=["切片"])
 
 @chunk_api.post("/upload/init/", dependencies=[Depends(share_required_login)])
 async def init_chunk_upload(data: InitChunkUploadModel, ip: str = Depends(ip_limit["upload"])):
+    # 检查文件大小限制
+    if data.file_size > settings.uploadSize:
+        max_size_mb = settings.uploadSize / (1024 * 1024)
+        raise HTTPException(
+            status_code=403, detail=f"大小超过限制,最大为{max_size_mb:.2f} MB"
+        )
+    
+    # 检查用户存储容量限制
+    await check_user_storage_limit(data.user_id, data.file_size)
+    
     # # 秒传检查
     # existing = await FileCodes.filter(file_hash=data.file_hash).first()
     # if existing:
@@ -249,6 +287,10 @@ async def complete_upload(upload_id: str, data: CompleteUploadModel, ip: str = D
     if not chunk_info:
         raise HTTPException(status.HTTP_404_NOT_FOUND, detail="上传会话不存在")
 
+    # 再次检查用户存储容量限制（防止在分片上传过程中容量被其他上传占用）
+    user_id = chunk_info.user_id or data.user_id
+    await check_user_storage_limit(user_id, chunk_info.file_size)
+
     storage = storages[settings.file_storage]()
     # 验证所有分片
     completed_chunks = await UploadChunk.filter(
@@ -282,6 +324,14 @@ async def complete_upload(upload_id: str, data: CompleteUploadModel, ip: str = D
     await storage.clean_chunks(upload_id, save_path)
     return APIResponse(detail={"code": code, "name": chunk_info.file_name})
 
+
+@share_api.delete("/file/user_delete")
+async def file_delete(
+        data: UserIDData,
+        file_service: FileService = Depends(get_file_service)
+):
+    await file_service.delete_user_file(data.id,data.user_id)
+    return APIResponse()
 
 @share_api.post("/user/files/", dependencies=[Depends(share_required_login)])
 async def get_user_files(data: UserFileListRequest):

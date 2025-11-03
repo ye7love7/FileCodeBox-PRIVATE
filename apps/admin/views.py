@@ -3,6 +3,7 @@
 # @File    : views.py
 # @Software: PyCharm
 import datetime
+from re import U
 
 from fastapi import APIRouter, Depends, HTTPException
 from apps.admin.services import FileService, ConfigService, LocalFileService
@@ -67,9 +68,8 @@ async def file_delete(
         file_service: FileService = Depends(get_file_service),
         admin: bool = Depends(admin_required),
 ):
-    await file_service.delete_file(data.id,data.user_id)
+    await file_service.delete_file(data.id)
     return APIResponse()
-
 
 @admin_api.get("/file/list")
 async def file_list(
